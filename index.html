@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前線突擊：鋼鐵堡壘</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117;
+            color: #e4e7eb;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .game-container {
+            width: 100%;
+            max-width: 900px;
+            height: 100%;
+            max-height: 600px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #30363d;
+            border-radius: 12px;
+            background-color: #161b22;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        canvas {
+            background-color: #010409;
+            width: 100%;
+            height: 100%;
+            border-bottom-left-radius: 10px;
+            border-bottom-right-radius: 10px;
+        }
+
+        .game-ui {
+            width: 100%;
+            padding: 10px;
+            background-color: #21262d;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: inset 0 -2px 5px rgba(0, 0, 0, 0.2);
+            flex-wrap: wrap; /* Allow wrapping for smaller screens */
+            gap: 10px;
+        }
+        .ui-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .start-menu, .game-over-menu, .shop-menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(13, 17, 23, 0.95);
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            z-index: 100;
+            animation: fadeIn 0.5s ease-in-out;
+            width: 90%;
+            max-width: 600px;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .title-text {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #58a6ff;
+            text-shadow: 0 0 10px #58a6ff;
+            margin-bottom: 20px;
+        }
+
+        .button {
+            padding: 12px 24px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #0d1117;
+            background-color: #58a6ff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .button:hover:not(:disabled) {
+            background-color: #79c0ff;
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.4);
+            transform: translateY(-2px);
+        }
+        .button:active:not(:disabled) {
+            background-color: #388bfd;
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .button:disabled {
+            background-color: #444c56;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .stat-bar-container {
+            width: 120px; /* Reduced width */
+            height: 20px;
+            background-color: #444c56;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #636e7b;
+            position: relative;
+        }
+
+        .stat-bar {
+            height: 100%;
+            transition: width 0.2s ease-out;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+        }
+
+        .health-bar { background-color: #f85149; z-index: 1; }
+        .shield-bar { background-color: #58a6ff; z-index: 2; }
+        .overheat-bar { background-color: #fcd95c; }
+        .ammo-bar { background-color: #7ee787; }
+
+        .game-message {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 20px;
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        #emp-effect {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0);
+            pointer-events: none;
+            transition: background-color 0.1s ease-in-out;
+            z-index: 90;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex items-center justify-center p-4">
+
+    <div id="start-menu" class="start-menu hidden">
+        <h1 class="title-text">前線突擊：鋼鐵堡壘</h1>
+        <p class="mb-6">利用你的機槍，抵禦一波波的機械敵人！</p>
+        <button id="start-button" class="button">開始遊戲</button>
+    </div>
+
+    <div id="game-over-menu" class="game-over-menu hidden">
+        <h1 class="title-text">遊戲結束</h1>
+        <p id="score-text" class="mb-4 text-xl"></p>
+        <p id="reason-text" class="mb-6 text-sm text-gray-400"></p>
+        <button id="restart-button" class="button">重新開始</button>
+    </div>
+    
+    <div id="shop-menu" class="shop-menu hidden">
+        <h1 class="title-text">升級商店</h1>
+        <p class="mb-4">使用分數購買升級！目前分數: <span id="shop-score">0</span></p>
+        <div id="upgrades-container" class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+            <!-- Upgrade items will be dynamically inserted here -->
+        </div>
+        <button id="close-shop-button" class="button">關閉商店</button>
+    </div>
+
+    <div id="game-container" class="game-container hidden">
+        <div class="game-ui">
+            <div class="ui-section">
+                <span>生命/護盾</span>
+                <div class="stat-bar-container">
+                    <div id="health-bar" class="stat-bar health-bar" style="width: 100%;"></div>
+                    <div id="shield-bar" class="stat-bar shield-bar" style="width: 100%;"></div>
+                </div>
+            </div>
+            <div class="ui-section">
+                <span>彈藥</span>
+                <div class="stat-bar-container">
+                    <div id="ammo-bar" class="stat-bar ammo-bar" style="width: 100%;"></div>
+                </div>
+            </div>
+            <div class="ui-section">
+                <span>過熱</span>
+                <div class="stat-bar-container">
+                    <div id="overheat-bar" class="stat-bar overheat-bar" style="width: 0%;"></div>
+                </div>
+            </div>
+            <div class="ui-section">
+                <span id="score-display">分數: 0</span>
+                <span id="wave-display">波次: 1</span>
+            </div>
+            <div class="ui-section ml-auto"> <!-- Push buttons to the right -->
+                <button id="shop-button" class="button text-sm py-2 px-3">商店</button>
+                <button id="emp-button" class="button text-sm py-2 px-3">EMP 脈衝</button>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="emp-effect"></div>
+    </div>
+
+    <div id="game-message" class="game-message"></div>
+
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startMenu = document.getElementById('start-menu');
+        const startButton = document.getElementById('start-button');
+        const gameOverMenu = document.getElementById('game-over-menu');
+        const restartButton = document.getElementById('restart-button');
+        const gameContainer = document.getElementById('game-container');
+        const shopMenu = document.getElementById('shop-menu');
+        const shopButton = document.getElementById('shop-button');
+        const closeShopButton = document.getElementById('close-shop-button');
+        const upgradesContainer = document.getElementById('upgrades-container');
+        const shopScoreDisplay = document.getElementById('shop-score');
+        
+        const healthBar = document.getElementById('health-bar');
+        const shieldBar = document.getElementById('shield-bar'); 
+        const ammoBar = document.getElementById('ammo-bar');
+        const overheatBar = document.getElementById('overheat-bar');
+        
+        const scoreDisplay = document.getElementById('score-display');
+        const waveDisplay = document.getElementById('wave-display');
+        const gameMessage = document.getElementById('game-message');
+        const scoreText = document.getElementById('score-text');
+        const reasonText = document.getElementById('reason-text');
+        const empButton = document.getElementById('emp-button');
+        const empEffect = document.getElementById('emp-effect');
+
+        // Game State Variables
+        let gameRunning = false;
+        let gamePaused = false;
+        let score = 0;
+        let wave = 1;
+        
+        // Player Stats
+        let health = 100;
+        let maxHealth = 100;
+        let shield = 50;
+        let maxShield = 50; 
+        let shieldRegenRate = 0.5;
+        let shieldRegenDelay = 3000;
+        let lastDamageTime = 0;
+
+        let machineGun = {
+            ammo: 100,
+            maxAmmo: 100,
+            overheat: 0,
+            maxOverheat: 100,
+            overheatRate: 0.5,
+            cooldownRate: 0.3,
+            reloadTime: 2000,
+            shooting: false,
+            canShoot: true,
+            damage: 5
+        };
+        
+        const emp = { canUse: true };
+        const enemies = [];
+        const bullets = [];
+
+        let mouseX = 0;
+        let mouseY = 0;
+
+        // Enemy spawn logic
+        let lastSpawnTime = 0;
+        let spawnInterval = 1000;
+        let nextWaveTime = 60000; 
+        let lastWaveTime = 0;
+
+        // Shop upgrade costs
+        let upgradeCosts = {};
+        const initialUpgradeCosts = {
+            maxHealth: 50,
+            maxShield: 50,
+            shieldRegen: 75,
+            gunDamage: 100,
+            reloadSpeed: 100,
+            overheatCooldown: 75,
+        };
+
+        // Game Object Classes
+        class Enemy {
+             constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                this.radius = 15;
+                this.color = '#8b949e';
+                this.baseSpeed = 0.5 + (wave * 0.05); // Speed scales with waves
+                this.speed = this.baseSpeed;
+                this.health = 50 + (wave * 5);
+                this.maxHealth = 50 + (wave * 5);
+                this.armor = 0;
+
+                if (type === 'heavy') {
+                    this.radius = 25;
+                    this.color = '#c9d1d9';
+                    this.baseSpeed = 0.3 + (wave * 0.03);
+                    this.speed = this.baseSpeed;
+                    this.health = 200 + (wave * 20);
+                    this.maxHealth = 200 + (wave * 20);
+                    this.armor = 0.7;
+                } else if (type === 'bomber') {
+                    this.radius = 20;
+                    this.color = '#f85149';
+                    this.baseSpeed = 0.2 + (wave * 0.02);
+                    this.speed = this.baseSpeed;
+                    this.health = 80 + (wave * 8);
+                    this.maxHealth = 80 + (wave * 8);
+                    this.isBomb = true;
+                } else if (type === 'scout') {
+                    this.radius = 10;
+                    this.color = '#58a6ff';
+                    this.baseSpeed = 0.7 + (wave * 0.07);
+                    this.speed = this.baseSpeed;
+                    this.health = 30 + (wave * 3);
+                    this.maxHealth = 30 + (wave * 3);
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+                // Health bar
+                if (this.health < this.maxHealth) {
+                    const healthPercent = this.health / this.maxHealth;
+                    ctx.fillStyle = '#444c56';
+                    ctx.fillRect(this.x - this.radius, this.y - this.radius - 10, this.radius * 2, 5);
+                    ctx.fillStyle = '#f85149';
+                    ctx.fillRect(this.x - this.radius, this.y - this.radius - 10, this.radius * 2 * healthPercent, 5);
+                }
+            }
+
+            update() {
+                const angle = Math.atan2(canvas.height / 2 - this.y, canvas.width / 2 - this.x);
+                this.x += Math.cos(angle) * this.speed;
+                this.y += Math.sin(angle) * this.speed;
+            }
+        }
+        class Bullet {
+            constructor(x, y, targetX, targetY) {
+                this.x = x;
+                this.y = y;
+                this.radius = 2;
+                this.color = '#ffffff';
+                this.speed = 10;
+                const angle = Math.atan2(targetY - y, targetX - x);
+                this.dx = Math.cos(angle) * this.speed;
+                this.dy = Math.sin(angle) * this.speed;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+            }
+            update() {
+                this.x += this.dx;
+                this.y += this.dy;
+            }
+        }
+        
+        // Game Flow Functions
+        function initGame() {
+            gameRunning = true;
+            gamePaused = false;
+            score = 0;
+            wave = 1;
+            
+            // Reset stats to base values
+            maxHealth = 100;
+            health = maxHealth;
+            maxShield = 50; 
+            shield = maxShield;
+            shieldRegenRate = 0.5;
+            machineGun.damage = 5;
+            machineGun.reloadTime = 2000;
+            machineGun.cooldownRate = 0.3;
+
+            machineGun.ammo = machineGun.maxAmmo;
+            machineGun.overheat = 0;
+            machineGun.canShoot = true;
+            enemies.length = 0;
+            bullets.length = 0;
+            spawnInterval = 1000;
+            lastSpawnTime = Date.now();
+            lastWaveTime = Date.now();
+            lastDamageTime = 0; 
+            upgradeCosts = { ...initialUpgradeCosts };
+
+            updateUI();
+            updateShopUI();
+        }
+
+        function endGame(reason) {
+            gameRunning = false;
+            gameContainer.classList.add('hidden');
+            gameOverMenu.classList.remove('hidden');
+            scoreText.textContent = `你的分數: ${score}`;
+            reasonText.textContent = reason;
+        }
+
+        function gameLoop() {
+            if (!gameRunning || gamePaused) {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            const containerRect = gameContainer.getBoundingClientRect();
+            canvas.width = containerRect.width;
+            canvas.height = containerRect.height - gameContainer.querySelector('.game-ui').offsetHeight;
+
+            ctx.fillStyle = '#010409';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawTurret();
+
+            const now = Date.now();
+            if (now - lastSpawnTime > spawnInterval) {
+                spawnEnemy();
+                lastSpawnTime = now;
+            }
+            if (now - lastWaveTime > nextWaveTime) {
+                nextWave();
+                lastWaveTime = now;
+            }
+
+            if (shield < maxShield && (now - lastDamageTime > shieldRegenDelay)) {
+                shield = Math.min(maxShield, shield + shieldRegenRate);
+            }
+
+            // Update & Draw Game Objects
+            enemies.forEach((enemy, i) => {
+                enemy.update();
+                enemy.draw();
+                const dx = canvas.width / 2 - enemy.x;
+                const dy = canvas.height / 2 - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < enemy.radius + 30) {
+                    let damage = enemy.isBomb ? 25 : 5;
+                    if (shield > 0) {
+                        shield -= damage;
+                        if (shield < 0) {
+                            health += shield;
+                            shield = 0;
+                        }
+                    } else {
+                        health -= damage;
+                    }
+                    lastDamageTime = now;
+                    if (enemy.isBomb) showMessage("自爆機造成了巨大傷害！", '#f85149');
+                    else if (shield <= 0) showMessage("護盾失效！生命值受損！", '#f85149');
+                    enemies.splice(i, 1);
+                    if (health <= 0) endGame("基地核心被摧毀了！");
+                }
+            });
+
+            if (machineGun.shooting && machineGun.canShoot) {
+                if (machineGun.ammo > 0) {
+                    shootBullet();
+                    machineGun.ammo--;
+                    machineGun.overheat += machineGun.overheatRate;
+                } else {
+                    showMessage("彈藥耗盡，正在重新裝填...", '#fcd95c');
+                    machineGun.canShoot = false;
+                    setTimeout(() => {
+                        machineGun.ammo = machineGun.maxAmmo;
+                        machineGun.canShoot = true;
+                    }, machineGun.reloadTime);
+                }
+            }
+            
+            if (!machineGun.shooting && machineGun.overheat > 0) {
+                machineGun.overheat = Math.max(0, machineGun.overheat - machineGun.cooldownRate);
+            } else if (machineGun.overheat >= machineGun.maxOverheat) {
+                machineGun.canShoot = false;
+                showMessage("機槍過熱，暫時無法射擊！", '#f85149');
+                setTimeout(() => { machineGun.canShoot = true; }, 1500);
+            }
+
+            bullets.forEach((bullet, i) => {
+                bullet.update();
+                bullet.draw();
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    const dx = bullet.x - enemy.x;
+                    const dy = bullet.y - enemy.y;
+                    if (Math.sqrt(dx * dx + dy * dy) < bullet.radius + enemy.radius) {
+                        bullets.splice(i, 1);
+                        enemy.health -= machineGun.damage * (1 - enemy.armor);
+                        if (enemy.health <= 0) {
+                            score += (enemy.type === 'heavy' ? 10 : (enemy.type === 'scout' ? 3 : 5));
+                            enemies.splice(j, 1);
+                        }
+                        return; // Bullet hits one enemy and is destroyed
+                    }
+                }
+                if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+                    bullets.splice(i, 1);
+                }
+            });
+
+            updateUI();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Drawing Functions
+        function drawTurret() {
+            const turretX = canvas.width / 2;
+            const turretY = canvas.height / 2;
+            const turretRadius = 40;
+            ctx.beginPath();
+            ctx.arc(turretX, turretY, turretRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#444c56';
+            ctx.fill();
+            const angle = Math.atan2(mouseY - turretY, mouseX - turretX);
+            ctx.save();
+            ctx.translate(turretX, turretY);
+            ctx.rotate(angle);
+            ctx.fillStyle = '#21262d';
+            ctx.fillRect(turretRadius - 10, -15 / 2, 60, 15);
+            ctx.restore();
+        }
+
+        // Action Functions
+        function spawnEnemy() {
+            const side = Math.floor(Math.random() * 4);
+            let x, y;
+            const types = ['normal', 'scout', 'heavy', 'bomber'];
+            const type = types[Math.floor(Math.random() * (wave > 2 ? types.length : 2))]; // Introduce stronger types later
+            switch (side) {
+                case 0: x = Math.random() * canvas.width; y = -50; break;
+                case 1: x = canvas.width + 50; y = Math.random() * canvas.height; break;
+                case 2: x = Math.random() * canvas.width; y = canvas.height + 50; break;
+                case 3: x = -50; y = Math.random() * canvas.height; break;
+            }
+            enemies.push(new Enemy(x, y, type));
+        }
+        function shootBullet() {
+            const turretX = canvas.width / 2, turretY = canvas.height / 2;
+            const angle = Math.atan2(mouseY - turretY, mouseX - turretX);
+            const startX = turretX + Math.cos(angle) * 50;
+            const startY = turretY + Math.sin(angle) * 50;
+            bullets.push(new Bullet(startX, startY, mouseX, mouseY));
+        }
+        function nextWave() {
+            wave++;
+            showMessage(`進入第 ${wave} 波`, '#7ee787');
+            spawnInterval = Math.max(150, spawnInterval - 50);
+        }
+        function activateEMP() {
+            if (!emp.canUse || !gameRunning) return;
+            showMessage("EMP 脈衝啟動！", '#58a6ff');
+            empEffect.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+            setTimeout(() => { empEffect.style.backgroundColor = 'rgba(255, 255, 255, 0)'; }, 100);
+            enemies.forEach(enemy => { enemy.speed = 0; });
+            setTimeout(() => { enemies.forEach(enemy => { enemy.speed = enemy.baseSpeed; }); }, 3000);
+        }
+
+        // UI & Shop Functions
+        function updateUI() {
+            healthBar.style.width = `${(health / maxHealth) * 100}%`;
+            shieldBar.style.width = `${(shield / maxShield) * 100}%`; 
+            ammoBar.style.width = `${(machineGun.ammo / machineGun.maxAmmo) * 100}%`;
+            overheatBar.style.width = `${(machineGun.overheat / machineGun.maxOverheat) * 100}%`;
+            scoreDisplay.textContent = `分數: ${score}`;
+            waveDisplay.textContent = `波次: ${wave}`;
+        }
+        function showMessage(message, color) {
+            gameMessage.textContent = message;
+            gameMessage.style.color = color;
+            gameMessage.style.opacity = '1';
+            setTimeout(() => { gameMessage.style.opacity = '0'; }, 2000);
+        }
+        function openShop() {
+            if (!gameRunning) return;
+            gamePaused = true;
+            updateShopUI();
+            shopMenu.classList.remove('hidden');
+        }
+        function closeShop() {
+            gamePaused = false;
+            shopMenu.classList.add('hidden');
+        }
+        function updateShopUI() {
+            shopScoreDisplay.textContent = score;
+            upgradesContainer.innerHTML = `
+                <div class="p-2 bg-gray-800 rounded-lg text-center"><h3 class="font-bold">最大生命值</h3><p class="text-xs text-gray-400">目前: ${maxHealth}</p><button class="button mt-2 w-full text-sm py-1" onclick="buyUpgrade('maxHealth')">升級 (${upgradeCosts.maxHealth}分)</button></div>
+                <div class="p-2 bg-gray-800 rounded-lg text-center"><h3 class="font-bold">最大護盾</h3><p class="text-xs text-gray-400">目前: ${maxShield}</p><button class="button mt-2 w-full text-sm py-1" onclick="buyUpgrade('maxShield')">升級 (${upgradeCosts.maxShield}分)</button></div>
+                <div class="p-2 bg-gray-800 rounded-lg text-center"><h3 class="font-bold">護盾恢復</h3><p class="text-xs text-gray-400">目前: ${shieldRegenRate.toFixed(2)}/t</p><button class="button mt-2 w-full text-sm py-1" onclick="buyUpgrade('shieldRegen')">升級 (${upgradeCosts.shieldRegen}分)</button></div>
+                <div class="p-2 bg-gray-800 rounded-lg text-center"><h3 class="font-bold">機槍傷害</h3><p class="text-xs text-gray-400">目前: ${machineGun.damage.toFixed(1)}</p><button class="button mt-2 w-full text-sm py-1" onclick="buyUpgrade('gunDamage')">升級 (${upgradeCosts.gunDamage}分)</button></div>
+                <div class="p-2 bg-gray-800 rounded-lg text-center"><h3 class="font-bold">裝填速度</h3><p class="text-xs text-gray-400">目前: ${machineGun.reloadTime / 1000}s</p><button class="button mt-2 w-full text-sm py-1" onclick="buyUpgrade('reloadSpeed')">升級 (${upgradeCosts.reloadSpeed}分)</button></div>
+                <div class="p-2 bg-gray-800 rounded-lg text-center"><h3 class="font-bold">冷卻效率</h3><p class="text-xs text-gray-400">目前: ${machineGun.cooldownRate.toFixed(2)}/t</p><button class="button mt-2 w-full text-sm py-1" onclick="buyUpgrade('overheatCooldown')">升級 (${upgradeCosts.overheatCooldown}分)</button></div>
+            `;
+            document.querySelectorAll('#upgrades-container button').forEach(button => {
+                const upgradeType = button.getAttribute('onclick').match(/'(.*?)'/)[1];
+                if (score < upgradeCosts[upgradeType]) button.disabled = true;
+            });
+        }
+        function buyUpgrade(type) {
+            const cost = upgradeCosts[type];
+            if (score >= cost) {
+                score -= cost;
+                upgradeCosts[type] = Math.floor(cost * 1.5);
+                switch (type) {
+                    case 'maxHealth': maxHealth += 25; health = maxHealth; break;
+                    case 'maxShield': maxShield += 25; shield = maxShield; break;
+                    case 'shieldRegen': shieldRegenRate += 0.25; break;
+                    case 'gunDamage': machineGun.damage += 2; break;
+                    case 'reloadSpeed': machineGun.reloadTime = Math.max(500, machineGun.reloadTime - 250); break;
+                    case 'overheatCooldown': machineGun.cooldownRate += 0.15; break;
+                }
+                updateUI();
+                updateShopUI();
+            } else {
+                showMessage("分數不足！", '#f85149');
+            }
+        }
+        
+        // Event Listeners
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+        canvas.addEventListener('mousedown', () => { if (gameRunning && !gamePaused) machineGun.shooting = true; });
+        canvas.addEventListener('mouseup', () => { machineGun.shooting = false; });
+        canvas.addEventListener('mouseleave', () => { machineGun.shooting = false; }); // Stop shooting if mouse leaves canvas
+
+        startButton.addEventListener('click', () => {
+            startMenu.classList.add('hidden');
+            gameContainer.classList.remove('hidden');
+            initGame();
+            gameLoop();
+        });
+        restartButton.addEventListener('click', () => {
+            gameOverMenu.classList.add('hidden');
+            gameContainer.classList.remove('hidden');
+            initGame();
+            gameLoop();
+        });
+        
+        shopButton.addEventListener('click', openShop);
+        closeShopButton.addEventListener('click', closeShop);
+        empButton.addEventListener('click', activateEMP);
+
+        window.onload = () => {
+            startMenu.classList.remove('hidden');
+        };
+
+    </script>
+</body>
+</html>
+
